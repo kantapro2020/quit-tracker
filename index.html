@@ -1,0 +1,724 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Quit Tracker">
+  <link rel="manifest" href="manifest.json">
+  <title>Quit Tracker</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    :root {
+      --bg:      #0f0f1a;
+      --card:    #1e1e2e;
+      --card2:   #2a2a3e;
+      --smoking: #f59e0b;
+      --drinking:#60a5fa;
+      --text:    #f1f5f9;
+      --muted:   #94a3b8;
+      --danger:  #ef4444;
+      --ok-bg:   rgba(245,158,11,0.15);
+      --ng-bg:   rgba(239,68,68,0.15);
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Hiragino Sans', sans-serif;
+      min-height: 100dvh;
+      padding-bottom: calc(24px + env(safe-area-inset-bottom));
+    }
+
+    header {
+      padding: calc(52px + env(safe-area-inset-top)) 20px 16px;
+      text-align: center;
+    }
+
+    header h1 {
+      font-size: 1.1rem;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      color: var(--muted);
+    }
+
+    /* ── Tabs ── */
+    .tabs {
+      display: flex;
+      margin: 0 20px 20px;
+      background: var(--card);
+      border-radius: 14px;
+      padding: 4px;
+      gap: 4px;
+    }
+
+    .tab {
+      flex: 1;
+      padding: 12px;
+      border: none;
+      background: transparent;
+      color: var(--muted);
+      font-size: 1rem;
+      font-weight: 600;
+      border-radius: 10px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .tab.active[data-tab="smoking"]  { background: var(--smoking);  color: #000; }
+    .tab.active[data-tab="drinking"] { background: var(--drinking); color: #000; }
+
+    /* ── Panels ── */
+    .panel { display: none; padding: 0 20px; }
+    .panel.active { display: block; }
+
+    /* ── Card ── */
+    .card {
+      background: var(--card);
+      border-radius: 20px;
+      padding: 22px 20px;
+      margin-bottom: 14px;
+    }
+
+    .card-label {
+      font-size: 0.75rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      margin-bottom: 10px;
+    }
+
+    .big-number {
+      font-size: 5rem;
+      font-weight: 800;
+      line-height: 1;
+    }
+
+    .big-number.smoking  { color: var(--smoking); }
+    .big-number.drinking { color: var(--drinking); }
+
+    .unit     { font-size: 0.95rem; color: var(--muted); margin-top: 4px; margin-bottom: 10px; }
+    .sub-text { font-size: 0.82rem; color: var(--muted); }
+    .sub-text + .sub-text { margin-top: 4px; }
+
+    /* ── Progress ── */
+    .progress-wrap { margin-top: 16px; }
+
+    .progress-label {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.8rem;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+
+    .progress-bar {
+      background: var(--card2);
+      border-radius: 999px;
+      height: 8px;
+      overflow: hidden;
+    }
+
+    .progress-fill {
+      height: 100%;
+      border-radius: 999px;
+      background: var(--drinking);
+      transition: width 0.5s ease;
+    }
+
+    .progress-fill.over { background: var(--danger); }
+
+    /* ── Buttons ── */
+    .btn {
+      display: block;
+      width: 100%;
+      padding: 15px;
+      border: none;
+      border-radius: 14px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      margin-bottom: 12px;
+      transition: opacity 0.15s;
+    }
+
+    .btn:active { opacity: 0.65; }
+
+    .btn-smoking   { background: var(--smoking);  color: #000; }
+    .btn-drinking  { background: var(--drinking); color: #000; }
+    .btn-secondary { background: var(--card2);    color: var(--text); }
+    .btn-danger {
+      background: transparent;
+      color: var(--danger);
+      border: 1.5px solid var(--danger);
+    }
+
+    /* ── Log list ── */
+    .log-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .log-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: var(--card2);
+      border-radius: 10px;
+      padding: 10px 12px;
+    }
+
+    .log-main { font-size: 0.92rem; }
+    .log-sub  { font-size: 0.78rem; color: var(--muted); margin-top: 2px; display: flex; align-items: center; gap: 6px; }
+
+    .badge {
+      display: inline-block;
+      padding: 1px 7px;
+      border-radius: 999px;
+      font-size: 0.7rem;
+      font-weight: 700;
+    }
+
+    .badge-ok { background: var(--ok-bg); color: var(--smoking); }
+    .badge-ng { background: var(--ng-bg); color: var(--danger); }
+
+    .log-delete {
+      background: none;
+      border: none;
+      color: var(--danger);
+      font-size: 1rem;
+      cursor: pointer;
+      padding: 6px 8px;
+      line-height: 1;
+      flex-shrink: 0;
+    }
+
+    .empty-state {
+      text-align: center;
+      color: var(--muted);
+      padding: 18px 0;
+      font-size: 0.85rem;
+    }
+
+    /* ── Modal ── */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.75);
+      z-index: 100;
+      align-items: flex-end;
+      justify-content: center;
+    }
+
+    .modal-overlay.open { display: flex; }
+
+    .modal {
+      background: var(--card);
+      border-radius: 24px 24px 0 0;
+      padding: 28px 20px calc(28px + env(safe-area-inset-bottom));
+      width: 100%;
+      max-width: 480px;
+    }
+
+    .modal h2 { font-size: 1.05rem; text-align: center; margin-bottom: 22px; }
+
+    .field-label {
+      font-size: 0.75rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 6px;
+    }
+
+    .field-wrap { margin-bottom: 16px; }
+
+    input[type="date"],
+    select {
+      width: 100%;
+      padding: 13px 14px;
+      background: var(--card2);
+      border: none;
+      border-radius: 12px;
+      color: var(--text);
+      font-size: 1rem;
+      appearance: none;
+      -webkit-appearance: none;
+    }
+
+    select {
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%2394a3b8' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 14px center;
+      padding-right: 36px;
+    }
+
+    .modal-btns { display: flex; gap: 10px; }
+    .modal-btns .btn { margin: 0; flex: 1; }
+  </style>
+</head>
+<body>
+
+<header><h1>QUIT TRACKER</h1></header>
+
+<div class="tabs">
+  <button class="tab active" data-tab="smoking">🚭 禁煙</button>
+  <button class="tab"        data-tab="drinking">🍺 禁酒</button>
+</div>
+
+<!-- ══════════ Smoking Panel ══════════ -->
+<div class="panel active" id="panel-smoking">
+
+  <div class="card">
+    <div class="card-label">禁煙継続</div>
+    <div class="big-number smoking" id="smoking-days">-</div>
+    <div class="unit">日経過</div>
+    <div class="sub-text" id="smoking-start-text">開始日未設定</div>
+    <div class="sub-text" id="smoking-reset-text" style="display:none; color:var(--danger);"></div>
+    <div class="sub-text" style="margin-top:8px; font-size:0.75rem;">3本未満の喫煙は継続扱い</div>
+  </div>
+
+  <button class="btn btn-smoking"   id="btn-record-smoking"  style="display:none">喫煙を記録する</button>
+  <button class="btn btn-secondary" id="btn-set-smoking">開始日を設定する</button>
+  <button class="btn btn-danger"    id="btn-change-smoking"  style="display:none">開始日を変更</button>
+
+  <div class="card" id="smoking-log-card" style="display:none">
+    <div class="card-label" style="margin-bottom:12px;">喫煙記録</div>
+    <ul class="log-list" id="smoking-log"></ul>
+  </div>
+
+</div>
+
+<!-- ══════════ Drinking Panel ══════════ -->
+<div class="panel" id="panel-drinking">
+
+  <div class="card">
+    <div class="card-label">今年の飲酒日数</div>
+    <div style="display:flex; align-items:baseline; gap:10px;">
+      <div class="big-number drinking" id="drinking-count">0</div>
+      <div style="font-size:1.3rem; color:var(--muted)">/ 20日</div>
+    </div>
+    <div class="unit" id="drinking-remaining-text">残り 20 日飲める</div>
+    <div class="progress-wrap">
+      <div class="progress-label">
+        <span>今年の消費</span>
+        <span id="drinking-pct">0%</span>
+      </div>
+      <div class="progress-bar">
+        <div class="progress-fill" id="drinking-bar" style="width:0%"></div>
+      </div>
+    </div>
+  </div>
+
+  <button class="btn btn-drinking" id="btn-record-drinking">飲酒を記録する</button>
+
+  <div class="card">
+    <div class="card-label" style="margin-bottom:12px;">飲酒記録（今年）</div>
+    <ul class="log-list" id="drinking-log"></ul>
+  </div>
+
+  <button class="btn btn-danger" id="btn-reset-drinking">今年の記録をすべてリセット</button>
+
+</div>
+
+<!-- ══════════ Modal: 禁煙開始日 ══════════ -->
+<div class="modal-overlay" id="modal-smoking-start">
+  <div class="modal">
+    <h2>禁煙開始日を設定</h2>
+    <div class="field-wrap">
+      <div class="field-label">開始日</div>
+      <input type="date" id="input-smoking-start">
+    </div>
+    <div class="modal-btns">
+      <button class="btn btn-secondary" id="btn-smoking-start-cancel">キャンセル</button>
+      <button class="btn btn-smoking"   id="btn-smoking-start-save">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ Modal: 喫煙記録 ══════════ -->
+<div class="modal-overlay" id="modal-smoking-record">
+  <div class="modal">
+    <h2>喫煙を記録する</h2>
+    <div class="field-wrap">
+      <div class="field-label">日付</div>
+      <input type="date" id="input-smoking-date">
+    </div>
+    <div class="field-wrap">
+      <div class="field-label">本数</div>
+      <select id="select-smoking-count">
+        <option value="1">1本</option>
+        <option value="2">2本</option>
+        <option value="3">3本（リセット）</option>
+        <option value="4">4本（リセット）</option>
+        <option value="5">5本（リセット）</option>
+        <option value="6">6本（リセット）</option>
+        <option value="7">7本（リセット）</option>
+        <option value="8">8本（リセット）</option>
+        <option value="9">9本（リセット）</option>
+        <option value="10">10本（リセット）</option>
+        <option value="15">15本（リセット）</option>
+        <option value="20">20本（リセット）</option>
+      </select>
+    </div>
+    <div class="modal-btns">
+      <button class="btn btn-secondary" id="btn-smoking-record-cancel">キャンセル</button>
+      <button class="btn btn-smoking"   id="btn-smoking-record-save">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ Modal: 飲酒記録 ══════════ -->
+<div class="modal-overlay" id="modal-drinking-record">
+  <div class="modal">
+    <h2>飲酒を記録する</h2>
+    <div class="field-wrap">
+      <div class="field-label">日付</div>
+      <input type="date" id="input-drinking-date">
+    </div>
+    <div class="field-wrap">
+      <div class="field-label">種類</div>
+      <select id="select-drinking-type">
+        <option value="ハイボール">ハイボール</option>
+        <option value="ビール">ビール</option>
+        <option value="酎ハイ">酎ハイ</option>
+        <option value="ロック">ロック</option>
+        <option value="ショット">ショット</option>
+      </select>
+    </div>
+    <div class="field-wrap">
+      <div class="field-label">量</div>
+      <select id="select-drinking-amount">
+        <option value="1杯">1杯</option>
+        <option value="2杯">2杯</option>
+        <option value="3杯">3杯</option>
+        <option value="4杯">4杯</option>
+        <option value="5杯">5杯</option>
+        <option value="6杯">6杯</option>
+        <option value="7杯">7杯</option>
+        <option value="8杯">8杯</option>
+        <option value="9杯">9杯</option>
+        <option value="10杯">10杯</option>
+      </select>
+    </div>
+    <div class="modal-btns">
+      <button class="btn btn-secondary" id="btn-drinking-cancel">キャンセル</button>
+      <button class="btn btn-drinking"  id="btn-drinking-save">記録する</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  // ── 定数 ─────────────────────────────────────────────────────────────────
+  const DRINK_LIMIT     = 20;
+  const SMOKE_THRESHOLD = 3;  // これ以上でリセット
+
+  // ── 日付ユーティリティ ────────────────────────────────────────────────────
+  function toDateStr(d) {
+    const y   = d.getFullYear();
+    const m   = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  }
+
+  function today()       { return toDateStr(new Date()); }
+  function currentYear() { return new Date().getFullYear(); }
+
+  function daysBetween(s, e) {
+    const start = new Date(s + 'T00:00:00');
+    const end   = new Date(e + 'T00:00:00');
+    return Math.floor((end - start) / 86400000);
+  }
+
+  function addDays(dateStr, n) {
+    const d = new Date(dateStr + 'T00:00:00');
+    d.setDate(d.getDate() + n);
+    return toDateStr(d);
+  }
+
+  function formatDate(d) {
+    const [y, m, day] = d.split('-');
+    return `${y}年${parseInt(m)}月${parseInt(day)}日`;
+  }
+
+  // ── State ─────────────────────────────────────────────────────────────────
+  function loadState() {
+    const smokingStart = localStorage.getItem('smokingStart') || null;
+    const smokingLog   = JSON.parse(localStorage.getItem('smokingLog')  || '[]');
+    let   drinkingLog  = JSON.parse(localStorage.getItem('drinkingLog') || '[]');
+
+    // 旧フォーマット（string[]）からマイグレーション
+    if (drinkingLog.length > 0 && typeof drinkingLog[0] === 'string') {
+      drinkingLog = drinkingLog.map(d => ({ date: d, type: '', amount: '' }));
+      localStorage.setItem('drinkingLog', JSON.stringify(drinkingLog));
+    }
+
+    return { smokingStart, smokingLog, drinkingLog };
+  }
+
+  function saveState() {
+    if (state.smokingStart) {
+      localStorage.setItem('smokingStart', state.smokingStart);
+    } else {
+      localStorage.removeItem('smokingStart');
+    }
+    localStorage.setItem('smokingLog',  JSON.stringify(state.smokingLog));
+    localStorage.setItem('drinkingLog', JSON.stringify(state.drinkingLog));
+  }
+
+  let state = loadState();
+
+  // ── 有効開始日の計算 ──────────────────────────────────────────────────────
+  function getEffectiveSmokingStart() {
+    if (!state.smokingStart) return null;
+    const resets = state.smokingLog
+      .filter(e => e.count >= SMOKE_THRESHOLD)
+      .sort((a, b) => a.date.localeCompare(b.date));
+    if (resets.length === 0) return state.smokingStart;
+    const nextDay = addDays(resets[resets.length - 1].date, 1);
+    return nextDay > state.smokingStart ? nextDay : state.smokingStart;
+  }
+
+  // ── 描画: 禁煙 ────────────────────────────────────────────────────────────
+  function renderSmoking() {
+    const effectiveStart = getEffectiveSmokingStart();
+    const btnRecord = document.getElementById('btn-record-smoking');
+    const btnSet    = document.getElementById('btn-set-smoking');
+    const btnChange = document.getElementById('btn-change-smoking');
+    const logCard   = document.getElementById('smoking-log-card');
+    const resetEl   = document.getElementById('smoking-reset-text');
+
+    if (effectiveStart) {
+      const days = Math.max(0, daysBetween(effectiveStart, today()));
+      document.getElementById('smoking-days').textContent      = days;
+      document.getElementById('smoking-start-text').textContent = `開始日: ${formatDate(state.smokingStart)}`;
+
+      const lastReset = state.smokingLog
+        .filter(e => e.count >= SMOKE_THRESHOLD)
+        .sort((a, b) => b.date.localeCompare(a.date))[0];
+
+      if (lastReset) {
+        resetEl.style.display = 'block';
+        resetEl.textContent   = `最終リセット: ${formatDate(lastReset.date)}（${lastReset.count}本）`;
+      } else {
+        resetEl.style.display = 'none';
+      }
+
+      btnRecord.style.display = 'block';
+      btnSet.style.display    = 'none';
+      btnChange.style.display = 'block';
+    } else {
+      document.getElementById('smoking-days').textContent       = '-';
+      document.getElementById('smoking-start-text').textContent = '開始日未設定';
+      resetEl.style.display   = 'none';
+      btnRecord.style.display = 'none';
+      btnSet.style.display    = 'block';
+      btnChange.style.display = 'none';
+    }
+
+    // 喫煙記録一覧
+    if (state.smokingLog.length > 0) {
+      logCard.style.display = 'block';
+      const logEl  = document.getElementById('smoking-log');
+      const sorted = [...state.smokingLog].sort((a, b) => b.date.localeCompare(a.date));
+      logEl.innerHTML = sorted.map(e => {
+        const isReset = e.count >= SMOKE_THRESHOLD;
+        const badge   = isReset
+          ? `<span class="badge badge-ng">リセット</span>`
+          : `<span class="badge badge-ok">継続</span>`;
+        return `
+          <li class="log-item">
+            <div>
+              <div class="log-main">${formatDate(e.date)}</div>
+              <div class="log-sub">${e.count}本 ${badge}</div>
+            </div>
+            <button class="log-delete" data-date="${e.date}" aria-label="削除">✕</button>
+          </li>`;
+      }).join('');
+
+      logEl.querySelectorAll('.log-delete').forEach(btn => {
+        btn.addEventListener('click', () => {
+          state.smokingLog = state.smokingLog.filter(e => e.date !== btn.dataset.date);
+          saveState();
+          renderSmoking();
+        });
+      });
+    } else {
+      logCard.style.display = 'none';
+    }
+  }
+
+  // ── 描画: 禁酒 ────────────────────────────────────────────────────────────
+  function renderDrinking() {
+    const year     = String(currentYear());
+    const thisYear = state.drinkingLog
+      .filter(e => e.date.startsWith(year))
+      .sort((a, b) => b.date.localeCompare(a.date));
+
+    const count     = thisYear.length;
+    const remaining = DRINK_LIMIT - count;
+
+    document.getElementById('drinking-count').textContent = count;
+
+    const remEl = document.getElementById('drinking-remaining-text');
+    if (remaining > 0) {
+      remEl.textContent = `残り ${remaining} 日飲める`;
+      remEl.style.color = 'var(--muted)';
+    } else if (remaining === 0) {
+      remEl.textContent = '上限（20日）に達しました';
+      remEl.style.color = 'var(--danger)';
+    } else {
+      remEl.textContent = `上限を ${Math.abs(remaining)} 日オーバー`;
+      remEl.style.color = 'var(--danger)';
+    }
+
+    const pct = Math.min(100, Math.round((count / DRINK_LIMIT) * 100));
+    document.getElementById('drinking-pct').textContent = `${pct}%`;
+    const bar = document.getElementById('drinking-bar');
+    bar.style.width = `${pct}%`;
+    bar.className   = 'progress-fill' + (pct >= 100 ? ' over' : '');
+
+    const logEl = document.getElementById('drinking-log');
+    if (thisYear.length === 0) {
+      logEl.innerHTML = '<li class="empty-state">今年の記録はありません</li>';
+    } else {
+      logEl.innerHTML = thisYear.map(e => `
+        <li class="log-item">
+          <div>
+            <div class="log-main">${formatDate(e.date)}</div>
+            <div class="log-sub">${[e.type, e.amount].filter(Boolean).join(' ')}</div>
+          </div>
+          <button class="log-delete" data-date="${e.date}" aria-label="削除">✕</button>
+        </li>`).join('');
+    }
+
+    logEl.querySelectorAll('.log-delete').forEach(btn => {
+      btn.addEventListener('click', () => {
+        state.drinkingLog = state.drinkingLog.filter(e => e.date !== btn.dataset.date);
+        saveState();
+        renderDrinking();
+      });
+    });
+  }
+
+  function render() { renderSmoking(); renderDrinking(); }
+
+  // ── タブ切替 ──────────────────────────────────────────────────────────────
+  document.querySelectorAll('.tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('.tab')  .forEach(el => el.classList.remove('active'));
+      document.querySelectorAll('.panel').forEach(el => el.classList.remove('active'));
+      tab.classList.add('active');
+      document.getElementById(`panel-${tab.dataset.tab}`).classList.add('active');
+    });
+  });
+
+  // ── モーダルヘルパー ──────────────────────────────────────────────────────
+  const openModal  = id => document.getElementById(id).classList.add('open');
+  const closeModal = id => document.getElementById(id).classList.remove('open');
+
+  // ── 禁煙: 開始日 ─────────────────────────────────────────────────────────
+  function openSmokingStartModal() {
+    const el = document.getElementById('input-smoking-start');
+    el.value = state.smokingStart || today();
+    el.max   = today();
+    openModal('modal-smoking-start');
+  }
+
+  document.getElementById('btn-set-smoking')   .addEventListener('click', openSmokingStartModal);
+  document.getElementById('btn-change-smoking') .addEventListener('click', openSmokingStartModal);
+  document.getElementById('btn-smoking-start-cancel').addEventListener('click', () => closeModal('modal-smoking-start'));
+
+  document.getElementById('btn-smoking-start-save').addEventListener('click', () => {
+    const val = document.getElementById('input-smoking-start').value;
+    if (!val) return;
+    state.smokingStart = val;
+    saveState();
+    renderSmoking();
+    closeModal('modal-smoking-start');
+  });
+
+  // ── 禁煙: 喫煙記録 ───────────────────────────────────────────────────────
+  document.getElementById('btn-record-smoking').addEventListener('click', () => {
+    const dateEl = document.getElementById('input-smoking-date');
+    dateEl.value = today();
+    dateEl.max   = today();
+    document.getElementById('select-smoking-count').value = '1';
+    openModal('modal-smoking-record');
+  });
+
+  document.getElementById('btn-smoking-record-cancel').addEventListener('click', () => closeModal('modal-smoking-record'));
+
+  document.getElementById('btn-smoking-record-save').addEventListener('click', () => {
+    const date  = document.getElementById('input-smoking-date').value;
+    const count = parseInt(document.getElementById('select-smoking-count').value, 10);
+    if (!date) return;
+
+    const idx = state.smokingLog.findIndex(e => e.date === date);
+    if (idx >= 0) {
+      state.smokingLog[idx].count = count;  // 同日付は上書き
+    } else {
+      state.smokingLog.push({ date, count });
+    }
+    saveState();
+    renderSmoking();
+    closeModal('modal-smoking-record');
+  });
+
+  // ── 禁酒: 飲酒記録 ───────────────────────────────────────────────────────
+  document.getElementById('btn-record-drinking').addEventListener('click', () => {
+    const dateEl = document.getElementById('input-drinking-date');
+    dateEl.value = today();
+    dateEl.max   = today();
+    document.getElementById('select-drinking-type').value   = 'ハイボール';
+    document.getElementById('select-drinking-amount').value = '1杯';
+    openModal('modal-drinking-record');
+  });
+
+  document.getElementById('btn-drinking-cancel').addEventListener('click', () => closeModal('modal-drinking-record'));
+
+  document.getElementById('btn-drinking-save').addEventListener('click', () => {
+    const date   = document.getElementById('input-drinking-date').value;
+    const type   = document.getElementById('select-drinking-type').value;
+    const amount = document.getElementById('select-drinking-amount').value;
+    if (!date) return;
+
+    const idx = state.drinkingLog.findIndex(e => e.date === date);
+    if (idx >= 0) {
+      state.drinkingLog[idx] = { date, type, amount };  // 同日付は上書き
+    } else {
+      state.drinkingLog.push({ date, type, amount });
+    }
+    saveState();
+    renderDrinking();
+    closeModal('modal-drinking-record');
+  });
+
+  // ── 禁酒: 年間リセット ────────────────────────────────────────────────────
+  document.getElementById('btn-reset-drinking').addEventListener('click', () => {
+    if (!confirm(`${currentYear()}年の飲酒記録をすべて削除しますか？`)) return;
+    const year = String(currentYear());
+    state.drinkingLog = state.drinkingLog.filter(e => !e.date.startsWith(year));
+    saveState();
+    renderDrinking();
+  });
+
+  // ── 初期化 ────────────────────────────────────────────────────────────────
+  render();
+  setInterval(render, 60000);  // 日付変わりに備えて1分ごとに更新
+
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('./sw.js');
+  }
+</script>
+</body>
+</html>

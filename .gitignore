@@ -1,0 +1,44 @@
+# ── 環境変数・APIキー ──────────────────────────────────────
+.env
+.env.*
+!.env.example
+
+# ── 依存パッケージ ────────────────────────────────────────
+node_modules/
+
+# ── 個人情報を含むファイル ────────────────────────────────
+*.private.*
+personal/
+private/
+*_personal.*
+
+# ── OS 自動生成ファイル ───────────────────────────────────
+# macOS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# ── エディタ・IDE ─────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# ── ビルド成果物 ──────────────────────────────────────────
+dist/
+build/
+.cache/
+
+# ── ログ ─────────────────────────────────────────────────
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
