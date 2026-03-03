@@ -191,16 +191,38 @@
     .badge-ok { background: var(--ok-bg); color: var(--smoking); }
     .badge-ng { background: var(--ng-bg); color: var(--danger); }
 
-    .log-delete {
+    /* ── Log action buttons ── */
+    .log-actions {
+      display: flex;
+      align-items: center;
+      gap: 2px;
+      flex-shrink: 0;
+    }
+
+    .log-edit, .log-delete {
       background: none;
       border: none;
-      color: var(--danger);
-      font-size: 1rem;
+      font-size: 0.95rem;
       cursor: pointer;
       padding: 6px 8px;
       line-height: 1;
-      flex-shrink: 0;
+      border-radius: 8px;
     }
+
+    .log-edit   { color: var(--muted); }
+    .log-delete { color: var(--danger); }
+
+    /* ── Drinking date group ── */
+    .log-date-group { display: flex; flex-direction: column; gap: 4px; }
+
+    .log-date-header {
+      font-size: 0.78rem;
+      color: var(--muted);
+      padding: 4px 2px 0;
+      font-weight: 600;
+    }
+
+    .log-date-items { display: flex; flex-direction: column; gap: 4px; }
 
     .empty-state {
       text-align: center;
@@ -284,7 +306,7 @@
     <div class="unit">日経過</div>
     <div class="sub-text" id="smoking-start-text">開始日未設定</div>
     <div class="sub-text" id="smoking-reset-text" style="display:none; color:var(--danger);"></div>
-    <div class="sub-text" style="margin-top:8px; font-size:0.75rem;">3本未満の喫煙は継続扱い</div>
+    <div class="sub-text" style="margin-top:8px; font-size:0.75rem;">3本以下の喫煙は継続扱い</div>
   </div>
 
   <button class="btn btn-smoking"   id="btn-record-smoking"  style="display:none">喫煙を記録する</button>
@@ -345,10 +367,10 @@
   </div>
 </div>
 
-<!-- ══════════ Modal: 喫煙記録 ══════════ -->
+<!-- ══════════ Modal: 喫煙記録（追加 / 編集） ══════════ -->
 <div class="modal-overlay" id="modal-smoking-record">
   <div class="modal">
-    <h2>喫煙を記録する</h2>
+    <h2 id="smoking-record-title">喫煙を記録する</h2>
     <div class="field-wrap">
       <div class="field-label">日付</div>
       <input type="date" id="input-smoking-date">
@@ -358,7 +380,7 @@
       <select id="select-smoking-count">
         <option value="1">1本</option>
         <option value="2">2本</option>
-        <option value="3">3本（リセット）</option>
+        <option value="3">3本</option>
         <option value="4">4本（リセット）</option>
         <option value="5">5本（リセット）</option>
         <option value="6">6本（リセット）</option>
@@ -377,10 +399,10 @@
   </div>
 </div>
 
-<!-- ══════════ Modal: 飲酒記録 ══════════ -->
+<!-- ══════════ Modal: 飲酒記録（追加 / 編集） ══════════ -->
 <div class="modal-overlay" id="modal-drinking-record">
   <div class="modal">
-    <h2>飲酒を記録する</h2>
+    <h2 id="drinking-record-title">飲酒を記録する</h2>
     <div class="field-wrap">
       <div class="field-label">日付</div>
       <input type="date" id="input-drinking-date">
@@ -412,7 +434,7 @@
     </div>
     <div class="modal-btns">
       <button class="btn btn-secondary" id="btn-drinking-cancel">キャンセル</button>
-      <button class="btn btn-drinking"  id="btn-drinking-save">記録する</button>
+      <button class="btn btn-drinking"  id="btn-drinking-save">保存</button>
     </div>
   </div>
 </div>
@@ -420,7 +442,7 @@
 <script>
   // ── 定数 ─────────────────────────────────────────────────────────────────
   const DRINK_LIMIT     = 20;
-  const SMOKE_THRESHOLD = 3;  // これ以上でリセット
+  const SMOKE_THRESHOLD = 4;  // 4本以上でリセット（3本以下は継続）
 
   // ── 日付ユーティリティ ────────────────────────────────────────────────────
   function toDateStr(d) {
@@ -434,9 +456,7 @@
   function currentYear() { return new Date().getFullYear(); }
 
   function daysBetween(s, e) {
-    const start = new Date(s + 'T00:00:00');
-    const end   = new Date(e + 'T00:00:00');
-    return Math.floor((end - start) / 86400000);
+    return Math.floor((new Date(e + 'T00:00:00') - new Date(s + 'T00:00:00')) / 86400000);
   }
 
   function addDays(dateStr, n) {
@@ -450,32 +470,40 @@
     return `${y}年${parseInt(m)}月${parseInt(day)}日`;
   }
 
-  // ── State ─────────────────────────────────────────────────────────────────
+  // ── State & Migration ─────────────────────────────────────────────────────
   function loadState() {
     const smokingStart = localStorage.getItem('smokingStart') || null;
     const smokingLog   = JSON.parse(localStorage.getItem('smokingLog')  || '[]');
     let   drinkingLog  = JSON.parse(localStorage.getItem('drinkingLog') || '[]');
 
-    // 旧フォーマット（string[]）からマイグレーション
+    // 旧フォーマット移行①: string[] → object[]
     if (drinkingLog.length > 0 && typeof drinkingLog[0] === 'string') {
-      drinkingLog = drinkingLog.map(d => ({ date: d, type: '', amount: '' }));
-      localStorage.setItem('drinkingLog', JSON.stringify(drinkingLog));
+      drinkingLog = drinkingLog.map(e => ({ date: e, type: '', amount: '' }));
     }
+
+    // 旧フォーマット移行②: id なし → id 付与（同日複数対応のため）
+    let needsSave = false;
+    drinkingLog = drinkingLog.map((e, i) => {
+      if (e.id == null) { needsSave = true; return { ...e, id: Date.now() + i }; }
+      return e;
+    });
+    if (needsSave) localStorage.setItem('drinkingLog', JSON.stringify(drinkingLog));
 
     return { smokingStart, smokingLog, drinkingLog };
   }
 
   function saveState() {
-    if (state.smokingStart) {
-      localStorage.setItem('smokingStart', state.smokingStart);
-    } else {
-      localStorage.removeItem('smokingStart');
-    }
+    if (state.smokingStart) localStorage.setItem('smokingStart', state.smokingStart);
+    else                    localStorage.removeItem('smokingStart');
     localStorage.setItem('smokingLog',  JSON.stringify(state.smokingLog));
     localStorage.setItem('drinkingLog', JSON.stringify(state.drinkingLog));
   }
 
   let state = loadState();
+
+  // 編集中エントリの追跡
+  let editingSmokingDate = null;  // 喫煙編集中の日付
+  let editingDrinkingId  = null;  // 飲酒編集中のid
 
   // ── 有効開始日の計算 ──────────────────────────────────────────────────────
   function getEffectiveSmokingStart() {
@@ -498,8 +526,7 @@
     const resetEl   = document.getElementById('smoking-reset-text');
 
     if (effectiveStart) {
-      const days = Math.max(0, daysBetween(effectiveStart, today()));
-      document.getElementById('smoking-days').textContent      = days;
+      document.getElementById('smoking-days').textContent       = Math.max(0, daysBetween(effectiveStart, today()));
       document.getElementById('smoking-start-text').textContent = `開始日: ${formatDate(state.smokingStart)}`;
 
       const lastReset = state.smokingLog
@@ -541,10 +568,16 @@
               <div class="log-main">${formatDate(e.date)}</div>
               <div class="log-sub">${e.count}本 ${badge}</div>
             </div>
-            <button class="log-delete" data-date="${e.date}" aria-label="削除">✕</button>
+            <div class="log-actions">
+              <button class="log-edit"   data-date="${e.date}" aria-label="編集">✏️</button>
+              <button class="log-delete" data-date="${e.date}" aria-label="削除">✕</button>
+            </div>
           </li>`;
       }).join('');
 
+      logEl.querySelectorAll('.log-edit').forEach(btn => {
+        btn.addEventListener('click', () => openSmokingRecordModal(btn.dataset.date));
+      });
       logEl.querySelectorAll('.log-delete').forEach(btn => {
         btn.addEventListener('click', () => {
           state.smokingLog = state.smokingLog.filter(e => e.date !== btn.dataset.date);
@@ -562,10 +595,12 @@
     const year     = String(currentYear());
     const thisYear = state.drinkingLog
       .filter(e => e.date.startsWith(year))
-      .sort((a, b) => b.date.localeCompare(a.date));
+      .sort((a, b) => b.date.localeCompare(a.date) || b.id - a.id);
 
-    const count     = thisYear.length;
-    const remaining = DRINK_LIMIT - count;
+    // 飲酒日数 = 今年のユニーク日数
+    const uniqueDates = new Set(thisYear.map(e => e.date));
+    const count       = uniqueDates.size;
+    const remaining   = DRINK_LIMIT - count;
 
     document.getElementById('drinking-count').textContent = count;
 
@@ -587,23 +622,47 @@
     bar.style.width = `${pct}%`;
     bar.className   = 'progress-fill' + (pct >= 100 ? ' over' : '');
 
+    // 飲酒記録一覧（日付ごとにグループ化）
     const logEl = document.getElementById('drinking-log');
     if (thisYear.length === 0) {
       logEl.innerHTML = '<li class="empty-state">今年の記録はありません</li>';
     } else {
-      logEl.innerHTML = thisYear.map(e => `
-        <li class="log-item">
-          <div>
-            <div class="log-main">${formatDate(e.date)}</div>
-            <div class="log-sub">${[e.type, e.amount].filter(Boolean).join(' ')}</div>
-          </div>
-          <button class="log-delete" data-date="${e.date}" aria-label="削除">✕</button>
-        </li>`).join('');
+      // 日付でグループ化
+      const groups = [];
+      const seen   = new Map();
+      thisYear.forEach(e => {
+        if (!seen.has(e.date)) { seen.set(e.date, []); groups.push(e.date); }
+        seen.get(e.date).push(e);
+      });
+
+      logEl.innerHTML = groups.map(date => {
+        const items = seen.get(date);
+        const itemsHtml = items.map(e => `
+          <li class="log-item">
+            <div class="log-sub" style="font-size:0.88rem; color:var(--text);">
+              ${[e.type, e.amount].filter(Boolean).join('　')}
+            </div>
+            <div class="log-actions">
+              <button class="log-edit"   data-id="${e.id}" aria-label="編集">✏️</button>
+              <button class="log-delete" data-id="${e.id}" aria-label="削除">✕</button>
+            </div>
+          </li>`).join('');
+
+        return `
+          <li class="log-date-group">
+            <div class="log-date-header">${formatDate(date)}</div>
+            <ul class="log-date-items log-list">${itemsHtml}</ul>
+          </li>`;
+      }).join('');
     }
 
+    logEl.querySelectorAll('.log-edit').forEach(btn => {
+      btn.addEventListener('click', () => openDrinkingRecordModal(Number(btn.dataset.id)));
+    });
     logEl.querySelectorAll('.log-delete').forEach(btn => {
       btn.addEventListener('click', () => {
-        state.drinkingLog = state.drinkingLog.filter(e => e.date !== btn.dataset.date);
+        const id = Number(btn.dataset.id);
+        state.drinkingLog = state.drinkingLog.filter(e => e.id !== id);
         saveState();
         renderDrinking();
       });
@@ -647,44 +706,85 @@
     closeModal('modal-smoking-start');
   });
 
-  // ── 禁煙: 喫煙記録 ───────────────────────────────────────────────────────
-  document.getElementById('btn-record-smoking').addEventListener('click', () => {
-    const dateEl = document.getElementById('input-smoking-date');
-    dateEl.value = today();
-    dateEl.max   = today();
-    document.getElementById('select-smoking-count').value = '1';
-    openModal('modal-smoking-record');
-  });
+  // ── 禁煙: 喫煙記録（追加 / 編集） ────────────────────────────────────────
+  function openSmokingRecordModal(editDate = null) {
+    const isEdit = editDate !== null;
+    editingSmokingDate = editDate;
 
-  document.getElementById('btn-smoking-record-cancel').addEventListener('click', () => closeModal('modal-smoking-record'));
+    document.getElementById('smoking-record-title').textContent = isEdit ? '喫煙記録を編集' : '喫煙を記録する';
+
+    const dateEl = document.getElementById('input-smoking-date');
+    const cntEl  = document.getElementById('select-smoking-count');
+
+    if (isEdit) {
+      const entry = state.smokingLog.find(e => e.date === editDate);
+      dateEl.value = entry ? entry.date  : today();
+      cntEl.value  = entry ? entry.count : '1';
+    } else {
+      dateEl.value = today();
+      cntEl.value  = '1';
+    }
+    dateEl.max = today();
+    openModal('modal-smoking-record');
+  }
+
+  document.getElementById('btn-record-smoking').addEventListener('click', () => openSmokingRecordModal());
+  document.getElementById('btn-smoking-record-cancel').addEventListener('click', () => {
+    editingSmokingDate = null;
+    closeModal('modal-smoking-record');
+  });
 
   document.getElementById('btn-smoking-record-save').addEventListener('click', () => {
     const date  = document.getElementById('input-smoking-date').value;
     const count = parseInt(document.getElementById('select-smoking-count').value, 10);
     if (!date) return;
 
-    const idx = state.smokingLog.findIndex(e => e.date === date);
-    if (idx >= 0) {
-      state.smokingLog[idx].count = count;  // 同日付は上書き
-    } else {
-      state.smokingLog.push({ date, count });
+    if (editingSmokingDate !== null) {
+      // 編集: 旧エントリを削除してから新エントリを追加
+      state.smokingLog = state.smokingLog.filter(e => e.date !== editingSmokingDate);
+      editingSmokingDate = null;
     }
+
+    // 同日付が既にあれば上書き
+    const idx = state.smokingLog.findIndex(e => e.date === date);
+    if (idx >= 0) state.smokingLog[idx].count = count;
+    else          state.smokingLog.push({ date, count });
+
     saveState();
     renderSmoking();
     closeModal('modal-smoking-record');
   });
 
-  // ── 禁酒: 飲酒記録 ───────────────────────────────────────────────────────
-  document.getElementById('btn-record-drinking').addEventListener('click', () => {
-    const dateEl = document.getElementById('input-drinking-date');
-    dateEl.value = today();
-    dateEl.max   = today();
-    document.getElementById('select-drinking-type').value   = 'ハイボール';
-    document.getElementById('select-drinking-amount').value = '1杯';
-    openModal('modal-drinking-record');
-  });
+  // ── 禁酒: 飲酒記録（追加 / 編集） ────────────────────────────────────────
+  function openDrinkingRecordModal(editId = null) {
+    const isEdit = editId !== null;
+    editingDrinkingId = editId;
 
-  document.getElementById('btn-drinking-cancel').addEventListener('click', () => closeModal('modal-drinking-record'));
+    document.getElementById('drinking-record-title').textContent = isEdit ? '飲酒記録を編集' : '飲酒を記録する';
+
+    const dateEl   = document.getElementById('input-drinking-date');
+    const typeEl   = document.getElementById('select-drinking-type');
+    const amountEl = document.getElementById('select-drinking-amount');
+
+    if (isEdit) {
+      const entry = state.drinkingLog.find(e => e.id === editId);
+      dateEl.value   = entry ? entry.date   : today();
+      typeEl.value   = entry ? entry.type   : 'ハイボール';
+      amountEl.value = entry ? entry.amount : '1杯';
+    } else {
+      dateEl.value   = today();
+      typeEl.value   = 'ハイボール';
+      amountEl.value = '1杯';
+    }
+    dateEl.max = today();
+    openModal('modal-drinking-record');
+  }
+
+  document.getElementById('btn-record-drinking').addEventListener('click', () => openDrinkingRecordModal());
+  document.getElementById('btn-drinking-cancel').addEventListener('click', () => {
+    editingDrinkingId = null;
+    closeModal('modal-drinking-record');
+  });
 
   document.getElementById('btn-drinking-save').addEventListener('click', () => {
     const date   = document.getElementById('input-drinking-date').value;
@@ -692,12 +792,16 @@
     const amount = document.getElementById('select-drinking-amount').value;
     if (!date) return;
 
-    const idx = state.drinkingLog.findIndex(e => e.date === date);
-    if (idx >= 0) {
-      state.drinkingLog[idx] = { date, type, amount };  // 同日付は上書き
+    if (editingDrinkingId !== null) {
+      // 編集: id で検索して更新
+      const idx = state.drinkingLog.findIndex(e => e.id === editingDrinkingId);
+      if (idx >= 0) state.drinkingLog[idx] = { id: editingDrinkingId, date, type, amount };
+      editingDrinkingId = null;
     } else {
-      state.drinkingLog.push({ date, type, amount });
+      // 追加: 同日複数OKなので常にpush
+      state.drinkingLog.push({ id: Date.now(), date, type, amount });
     }
+
     saveState();
     renderDrinking();
     closeModal('modal-drinking-record');
@@ -714,7 +818,7 @@
 
   // ── 初期化 ────────────────────────────────────────────────────────────────
   render();
-  setInterval(render, 60000);  // 日付変わりに備えて1分ごとに更新
+  setInterval(render, 60000);
 
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('./sw.js');
