@@ -265,6 +265,7 @@
     .field-wrap { margin-bottom: 16px; }
 
     input[type="date"],
+    input[type="text"],
     select {
       width: 100%;
       padding: 13px 14px;
@@ -431,6 +432,10 @@
         <option value="9杯">9杯</option>
         <option value="10杯">10杯</option>
       </select>
+    </div>
+    <div class="field-wrap">
+      <div class="field-label">メモ（任意）</div>
+      <input type="text" id="input-drinking-memo" placeholder="例: 友人と食事" maxlength="50">
     </div>
     <div class="modal-btns">
       <button class="btn btn-secondary" id="btn-drinking-cancel">キャンセル</button>
@@ -639,8 +644,11 @@
         const items = seen.get(date);
         const itemsHtml = items.map(e => `
           <li class="log-item">
-            <div class="log-sub" style="font-size:0.88rem; color:var(--text);">
-              ${[e.type, e.amount].filter(Boolean).join('　')}
+            <div>
+              <div class="log-sub" style="font-size:0.88rem; color:var(--text);">
+                ${[e.type, e.amount].filter(Boolean).join('　')}
+              </div>
+              ${e.memo ? `<div class="log-sub" style="margin-top:2px;">${e.memo}</div>` : ''}
             </div>
             <div class="log-actions">
               <button class="log-edit"   data-id="${e.id}" aria-label="編集">✏️</button>
@@ -765,16 +773,19 @@
     const dateEl   = document.getElementById('input-drinking-date');
     const typeEl   = document.getElementById('select-drinking-type');
     const amountEl = document.getElementById('select-drinking-amount');
+    const memoEl   = document.getElementById('input-drinking-memo');
 
     if (isEdit) {
       const entry = state.drinkingLog.find(e => e.id === editId);
       dateEl.value   = entry ? entry.date   : today();
       typeEl.value   = entry ? entry.type   : 'ハイボール';
       amountEl.value = entry ? entry.amount : '1杯';
+      memoEl.value   = entry ? (entry.memo || '') : '';
     } else {
       dateEl.value   = today();
       typeEl.value   = 'ハイボール';
       amountEl.value = '1杯';
+      memoEl.value   = '';
     }
     dateEl.max = today();
     openModal('modal-drinking-record');
@@ -790,16 +801,17 @@
     const date   = document.getElementById('input-drinking-date').value;
     const type   = document.getElementById('select-drinking-type').value;
     const amount = document.getElementById('select-drinking-amount').value;
+    const memo   = document.getElementById('input-drinking-memo').value.trim();
     if (!date) return;
 
     if (editingDrinkingId !== null) {
       // 編集: id で検索して更新
       const idx = state.drinkingLog.findIndex(e => e.id === editingDrinkingId);
-      if (idx >= 0) state.drinkingLog[idx] = { id: editingDrinkingId, date, type, amount };
+      if (idx >= 0) state.drinkingLog[idx] = { id: editingDrinkingId, date, type, amount, memo };
       editingDrinkingId = null;
     } else {
       // 追加: 同日複数OKなので常にpush
-      state.drinkingLog.push({ id: Date.now(), date, type, amount });
+      state.drinkingLog.push({ id: Date.now(), date, type, amount, memo });
     }
 
     saveState();
